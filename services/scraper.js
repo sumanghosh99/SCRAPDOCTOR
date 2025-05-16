@@ -48,14 +48,13 @@ const processExcelFiles = async () => {
     }));
 
     urlArray.push(...urls);
-  }
-
-  const destinationPath = path.join(PROCESSED_FOLDER_PATH, file);
-  try {
-    fs.renameSync(filePath, destinationPath);
-    console.log(`Moved file ${file} to ${PROCESSED_FOLDER_PATH}`);
-  } catch (error) {
-    console.error(`Error moving file ${file}: ${error.message}`);
+    const destinationPath = path.join(PROCESSED_FOLDER_PATH, file);
+    try {
+      fs.renameSync(filePath, destinationPath);
+      console.log(`Moved file ${file} to ${PROCESSED_FOLDER_PATH}`);
+    } catch (error) {
+      console.error(`Error moving file ${file}: ${error.message}`);
+    }
   }
 
   let allDoctorUrls = [];
