@@ -42,6 +42,14 @@ cron.schedule("0 * * * *", async () => {
   }
 });
 
+
+// processExcelFiles().then(res=>{
+//   console.log(res.length)
+// })
+// .catch(e=>{
+//   console.error('error------',e)
+// })
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
