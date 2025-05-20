@@ -1,6 +1,7 @@
-const express = require("express");
+import express from "express";
+import { scrapeDoctors, processExcelFiles } from "../services/scraper.js";
+
 const router = express.Router();
-const { scrapeDoctors, processExcelFiles } = require("../services/scraper");
 
 router.get("/scrape", async (req, res) => {
   try {
@@ -11,4 +12,4 @@ router.get("/scrape", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

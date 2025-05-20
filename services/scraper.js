@@ -1,11 +1,11 @@
-const puppeteer = require("puppeteer-extra");
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-const pLimit = require('p-limit').default;
-const fs = require("fs");
-const path = require("path");
-const xlsx = require("xlsx");
-const Doctor = require("../models/Doctor");
-const { Console } = require("console");
+import puppeteer from "puppeteer-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import pLimit from "p-limit";
+// import fs from "fs/promises";
+import fs from "fs";
+import path from "path";
+import xlsx from "xlsx";
+import Doctor from "../models/Doctor.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -22,14 +22,16 @@ const scrapeDoctors = async (searchUrl) => {
 
     // Get total pages
     const totalPages = await page.evaluate(() => {
-      const text = document.querySelector(".page-numbers__Label-sc-138ov1k-8")?.innerText || "";
+      const text =
+        document.querySelector(".page-numbers__Label-sc-138ov1k-8")
+          ?.innerText || "";
       return parseInt(text.match(/Page\s+\d+\s+of\s+(\d+)/i)?.[1] || 1);
     });
     await page.close();
 
     // Process all pages with concurrency control
     const limit = pLimit(1); // Optimal concurrency level
-    const pagePromises = Array.from({ length: totalPages }, (_, i) => 
+    const pagePromises = Array.from({ length: totalPages }, (_, i) =>
       limit(() => scrapeDoctorPage(browser, i + 1, searchUrl))
     );
 
@@ -46,8 +48,8 @@ const scrapeDoctorPage = async (browser, pageNum, baseUrl) => {
 
   try {
     await page.setRequestInterception(true);
-    page.on('request', req => {
-      ['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())
+    page.on("request", (req) => {
+      ["image", "stylesheet", "font", "media"].includes(req.resourceType())
         ? req.abort()
         : req.continue();
     });
@@ -55,7 +57,7 @@ const scrapeDoctorPage = async (browser, pageNum, baseUrl) => {
     try {
       await page.goto(`${baseUrl}&page_num=${pageNum}`, {
         waitUntil: "domcontentloaded",
-        timeout: 30000
+        timeout: 30000,
       });
     } catch (err) {
       console.warn(`Failed to load page ${pageNum}:`, err.message);
@@ -64,25 +66,28 @@ const scrapeDoctorPage = async (browser, pageNum, baseUrl) => {
 
     return await page.evaluate(() => {
       const professionals = [];
-      document.querySelectorAll('div.DetailCardDoctor__TitleWrapper-dno04z-6.htJfNr').forEach(div => {
-        const anchor = div.querySelector('a');
-        const h2 = anchor?.querySelector('h2');
-        const href = anchor?.getAttribute('href');
-        if (!h2 || !href) return;
+      document
+        .querySelectorAll("div.DetailCardDoctor__TitleWrapper-dno04z-6.htJfNr")
+        .forEach((div) => {
+          const anchor = div.querySelector("a");
+          const h2 = anchor?.querySelector("h2");
+          const href = anchor?.getAttribute("href");
+          if (!h2 || !href) return;
 
-        professionals.push({
-          name: h2.textContent.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim(),
-          profileUrl: `https://health.usnews.com${href}`
+          professionals.push({
+            name: h2.textContent
+              .replace(/<!--[\s\S]*?-->/g, "")
+              .replace(/\s+/g, " ")
+              .trim(),
+            profileUrl: `https://health.usnews.com${href}`,
+          });
         });
-      });
       return professionals;
     });
-
   } finally {
     await page.close();
   }
 };
-
 
 // Scrape individual doctor details
 // const scrapeDoctorDetails = async (url) => {
@@ -169,18 +174,20 @@ const scrapeDoctorPage = async (browser, pageNum, baseUrl) => {
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const scrapeDoctorDetails = async (url, retryCount = 3) => {
+  console.log(60, url);
+
   for (let attempt = 1; attempt <= retryCount; attempt++) {
     const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     const page = await browser.newPage();
 
     // Intercept and block unnecessary resources
     await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const blockedResources = ['image', 'stylesheet', 'font', 'media'];
+    page.on("request", (req) => {
+      const blockedResources = ["image", "stylesheet", "font", "media"];
       if (blockedResources.includes(req.resourceType())) {
         req.abort();
       } else {
@@ -189,10 +196,12 @@ const scrapeDoctorDetails = async (url, retryCount = 3) => {
     });
 
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
       // Wait for a key element
-      await page.waitForSelector('.Hero__TitleWrapper-sc-1lw4wit-6', { timeout: 15000 });
+      await page.waitForSelector(".Hero__TitleWrapper-sc-1lw4wit-6", {
+        timeout: 15000,
+      });
 
       const result = await page.evaluate(() => {
         const getText = (selector) =>
@@ -202,54 +211,60 @@ const scrapeDoctorDetails = async (url, retryCount = 3) => {
             el.textContent.trim()
           );
 
-        const name = getText('.Hero__Name-sc-1lw4wit-4')?.replace(/\s+/g, ' ');
-        const degree = document.querySelector('.Hero__Name-sc-1lw4wit-4 span')?.textContent.trim();
-        const location = getText('.Hero__Address-sc-1lw4wit-29');
+        const name = getText(".Hero__Name-sc-1lw4wit-4")?.replace(/\s+/g, " ");
+        const degree = document
+          .querySelector(".Hero__Name-sc-1lw4wit-4 span")
+          ?.textContent.trim();
+        const location = getText(".Hero__Address-sc-1lw4wit-29");
         const phone = getText('a[href^="tel:"]');
-        const specialty = getText('.Specialties__SpecialtyName-mzebq4-4');
-        const subSpecialtiy = getList('.Specialties__Subspecialty-mzebq4-3');
+        const specialty = getText(".Specialties__SpecialtyName-mzebq4-4");
+        const subSpecialty = getList(".Specialties__Subspecialty-mzebq4-3");
 
         const certifications = [];
         const licensures = [];
 
-        document.querySelectorAll('.mb4, .EducationAndExperience__Item-dbww3o-0').forEach(div => {
-          const org = div.querySelector('.kdaQRj')?.textContent.trim();
-          const details = div.querySelector('.cXIEbH')?.textContent.trim();
-          if (!org || !details) return;
+        document
+          .querySelectorAll(".mb4, .EducationAndExperience__Item-dbww3o-0")
+          .forEach((div) => {
+            const org = div.querySelector(".kdaQRj")?.textContent.trim();
+            const details = div.querySelector(".cXIEbH")?.textContent.trim();
+            if (!org || !details) return;
 
-          if (org.includes('Board') || details.includes('Certified')) {
-            certifications.push({
-              organization: org,
-              specialty: details.replace('Certified in', '').trim(),
-            });
-          } else if (org.includes('License')) {
-            licensures.push({
-              type: org,
-              status: details.replace('Active through', '').trim(),
-            });
-          }
-        });
+            if (org.includes("Board") || details.includes("Certified")) {
+              certifications.push({
+                organization: org,
+                specialty: details.replace("Certified in", "").trim(),
+              });
+            } else if (org.includes("License")) {
+              licensures.push({
+                type: org,
+                status: details.replace("Active through", "").trim(),
+              });
+            }
+          });
 
         const publications = [];
-        document.querySelectorAll('.mb4').forEach(div => {
-          const pub = div.querySelector('.kdaQRj')?.textContent.trim();
-          const author = div.querySelector('.cXIEbH')?.textContent.trim();
+        document.querySelectorAll(".mb4").forEach((div) => {
+          const pub = div.querySelector(".kdaQRj")?.textContent.trim();
+          const author = div.querySelector(".cXIEbH")?.textContent.trim();
           if (pub && author) publications.push({ publication: pub, author });
         });
 
         let medicalSchool = null;
-        document.querySelectorAll('.EducationAndExperience__Item-dbww3o-0').forEach(item => {
-          const desc = item.querySelector('.cXIEbH')?.textContent;
-          if (desc?.includes('Medical School')) {
-            medicalSchool = item.querySelector('.kdaQRj')?.textContent;
-          }
-        });
+        document
+          .querySelectorAll(".EducationAndExperience__Item-dbww3o-0")
+          .forEach((item) => {
+            const desc = item.querySelector(".cXIEbH")?.textContent;
+            if (desc?.includes("Medical School")) {
+              medicalSchool = item.querySelector(".kdaQRj")?.textContent;
+            }
+          });
 
         return {
           name,
           degree,
           specialty,
-          subSpecialtiy,
+          subSpecialty,
           location,
           phone,
           certifications,
@@ -258,11 +273,16 @@ const scrapeDoctorDetails = async (url, retryCount = 3) => {
           totalPublication: publications.length,
           medicalSchool,
           scrapedAt: new Date().toISOString(),
+          // sourceUrl: url,
         };
       });
 
+      await page.close();
+
       return result;
     } catch (error) {
+      console.log(error);
+
       console.error(`Attempt ${attempt} failed:`, error.message);
       if (attempt === retryCount) throw error;
       await delay(2000 * attempt); // Exponential backoff
@@ -282,7 +302,9 @@ const processExcelFiles = async () => {
     fs.mkdirSync(PROCESSED_FOLDER_PATH);
   }
 
-  const files = fs.readdirSync(FOLDER_PATH).filter(f => f.endsWith(".xlsx") || f.endsWith(".xls"));
+  const files = fs
+    .readdirSync(FOLDER_PATH)
+    .filter((f) => f.endsWith(".xlsx") || f.endsWith(".xls"));
 
   if (files.length === 0) {
     console.log("No Excel files found");
@@ -293,8 +315,12 @@ const processExcelFiles = async () => {
   for (const file of files) {
     const filePath = path.join(FOLDER_PATH, file);
     const workbook = xlsx.readFile(filePath);
-    const data = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-    urlArray.push(...data.map(row => ({ url: row.URL, searchUrl: row.searchURL })));
+    const data = xlsx.utils.sheet_to_json(
+      workbook.Sheets[workbook.SheetNames[0]]
+    );
+    urlArray.push(
+      ...data.map((row) => ({ url: row.URL, searchUrl: row.searchURL }))
+    );
 
     try {
       fs.renameSync(filePath, path.join(PROCESSED_FOLDER_PATH, file));
@@ -305,46 +331,50 @@ const processExcelFiles = async () => {
 
   // Get unique URLs with p-limit concurrency
   const limit = pLimit(2);
-  const uniqueUrls = [...new Set(urlArray.filter(u => u.url).map(u => u.url))];
-  const searchUrls = urlArray.filter(u => u.searchUrl).map(u => u.searchUrl);
+  const uniqueUrls = [
+    ...new Set(urlArray.filter((u) => u.url).map((u) => u.url)),
+  ];
+  const searchUrls = urlArray
+    .filter((u) => u.searchUrl)
+    .map((u) => u.searchUrl);
 
-  const doctorLinks = (await Promise.all(
-    searchUrls.map(url => limit(() => scrapeDoctors(url)))
-  )).flat().map(d => ({ url: d.profileUrl }));
+  const doctorLinks = (
+    await Promise.all(searchUrls.map((url) => limit(() => scrapeDoctors(url))))
+  )
+    .flat()
+    .map((d) => ({ url: d.profileUrl }));
 
-  const allUrls = [...uniqueUrls, ...doctorLinks.map(d => d.url)];
-  console.log('------------------',allUrls)
-  const uniqueDoctorUrls = [...new Set(allUrls)].map(url => ({ url }));
-  console.log(uniqueDoctorUrls.length)
-  const res = []
+  const allUrls = [...uniqueUrls, ...doctorLinks.map((d) => d.url)];
+  console.log("------------------", allUrls);
+  let uniqueDoctorUrls = [...new Set(allUrls)].map((url) => ({ url }));
+
+  console.log(uniqueDoctorUrls.length);
+  const res = [];
   const results = await Promise.all(
-    uniqueDoctorUrls.map(doctor =>
+    uniqueDoctorUrls.map((doctor) =>
       limit(() =>
         scrapeDoctorDetails(doctor.url)
-          .then(data => {
-
-            res.push(data)
-            // Doctor.upsert(data, { returning: true })
+          .then((data) => {
+            res.push(data);
+            Doctor.upsert(data, { returning: true });
           })
-          .catch((error)=>{
-
-            console.error('erro214134---------',error)
-            return{
+          .catch((error) => {
+            console.error("erro214134---------", error);
+            return {
               status: "error",
               url: doctor.url,
-              error: error.message
-            }
-
+              error: error.message,
+            };
           })
       )
     )
   );
-  console.log('------------------res',res.length)
+  console.log("------------------res", res.length);
 
   return {
     total: uniqueDoctorUrls.length,
-    success: results.filter(r => !r.status).length,
-    errors: results.filter(r => r.status === "error")
+    success: results.filter((r) => !r.status).length,
+    errors: results.filter((r) => r.status === "error"),
   };
 };
 
@@ -354,4 +384,5 @@ const processExcelFiles = async () => {
 // .catch(e=>{
 //   console.error(e)
 // })
-module.exports = { scrapeDoctors, processExcelFiles, scrapeDoctorDetails };
+// module.exports = { scrapeDoctors, processExcelFiles, scrapeDoctorDetails };
+export { scrapeDoctors, processExcelFiles, scrapeDoctorDetails };
