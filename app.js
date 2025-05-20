@@ -1,8 +1,8 @@
-const express = require("express");
-const sequelize = require("./config/database");
-const doctorsRouter = require("./routes/doctors");
-const cron = require("node-cron");
-const { processExcelFiles } = require("./services/scraper");
+import express from "express";
+import sequelize from "./config/database.js";
+import doctorsRouter from "./routes/doctors.js";
+import cron from "node-cron";
+import { processExcelFiles } from "./services/scraper.js";
 
 const app = express();
 const PORT = 3000;
@@ -42,13 +42,13 @@ cron.schedule("0 * * * *", async () => {
   }
 });
 
-
-processExcelFiles().then(res=>{
-  console.log(res.length)
-})
-.catch(e=>{
-  console.error('error------',e)
-})
+// processExcelFiles()
+//   .then((res) => {
+//     console.log(res.length);
+//   })
+//   .catch((e) => {
+//     console.error("error------", e);
+//   });
 
 // Start server
 app.listen(PORT, () => {
