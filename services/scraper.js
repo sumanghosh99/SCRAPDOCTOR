@@ -43,123 +43,232 @@ const scrapeDoctors = async (searchUrl) => {
 // Scrape a single page of doctor listings
 const scrapeDoctorPage = async (browser, pageNum, baseUrl) => {
   const page = await browser.newPage();
+
   try {
     await page.setRequestInterception(true);
     page.on('request', req => {
-      ['image', 'stylesheet', 'font', 'media'].includes(req.resourceType()) 
-        ? req.abort() 
+      ['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())
+        ? req.abort()
         : req.continue();
     });
 
-    await page.goto(`${baseUrl}&page_num=${pageNum}`, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000
-    });
+    try {
+      await page.goto(`${baseUrl}&page_num=${pageNum}`, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000
+      });
+    } catch (err) {
+      console.warn(`Failed to load page ${pageNum}:`, err.message);
+      return [];
+    }
 
     return await page.evaluate(() => {
       const professionals = [];
       document.querySelectorAll('div.DetailCardDoctor__TitleWrapper-dno04z-6.htJfNr').forEach(div => {
         const anchor = div.querySelector('a');
-        if (!anchor) return;
-        
-        const href = anchor.getAttribute('href');
-        const h2 = anchor.querySelector('h2');
-        if (!h2) return;
-        
+        const h2 = anchor?.querySelector('h2');
+        const href = anchor?.getAttribute('href');
+        if (!h2 || !href) return;
+
         professionals.push({
-          name: h2.textContent
-            .trim()
-            .replace(/\s+/g, ' ')
-            .replace(/\s?<!--.*?-->\s?/g, ' '),
+          name: h2.textContent.replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim(),
           profileUrl: `https://health.usnews.com${href}`
         });
       });
       return professionals;
     });
+
   } finally {
     await page.close();
   }
 };
 
+
 // Scrape individual doctor details
-const scrapeDoctorDetails = async (url) => {
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-  const page = await browser.newPage();
+// const scrapeDoctorDetails = async (url) => {
+//   const browser = await puppeteer.launch({
+//     headless: 'new',
+//     args: ["--no-sandbox", "--disable-setuid-sandbox"],
+//   });
+//   const page = await browser.newPage();
 
-  try {
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-    await page.waitForSelector(".Hero__TitleWrapper-sc-1lw4wit-6", { timeout: 10000 });
+//   try {
+//     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+//     await page.waitForSelector(".Hero__TitleWrapper-sc-1lw4wit-6", { timeout: 10000 });
 
-    return await page.evaluate(() => {
-      const getText = (selector) => document.querySelector(selector)?.textContent.trim() || null;
-      const getList = (selector) => Array.from(document.querySelectorAll(selector)).map(el => el.textContent.trim());
+//     return await page.evaluate(() => {
+//       const getText = (selector) => document.querySelector(selector)?.textContent.trim() || null;
+//       const getList = (selector) => Array.from(document.querySelectorAll(selector)).map(el => el.textContent.trim());
 
-      // Extract basic info
-      const name = getText(".Hero__Name-sc-1lw4wit-4")?.replace(/\s+/g, " ");
-      const degree = document.querySelector(".Hero__Name-sc-1lw4wit-4 span")?.textContent.trim();
-      const location = getText(".Hero__Address-sc-1lw4wit-29");
-      const phone = getText('a[href^="tel:"]');
-      const specialty = getText(".Specialties__SpecialtyName-mzebq4-4");
-      const subSpecialtiy = getList(".Specialties__Subspecialty-mzebq4-3");
+//       // Extract basic info
+//       const name = getText(".Hero__Name-sc-1lw4wit-4")?.replace(/\s+/g, " ");
+//       const degree = document.querySelector(".Hero__Name-sc-1lw4wit-4 span")?.textContent.trim();
+//       const location = getText(".Hero__Address-sc-1lw4wit-29");
+//       const phone = getText('a[href^="tel:"]');
+//       const specialty = getText(".Specialties__SpecialtyName-mzebq4-4");
+//       const subSpecialtiy = getList(".Specialties__Subspecialty-mzebq4-3");
 
-      // Extract education and certifications
-      const certifications = [];
-      const licensures = [];
-      document.querySelectorAll(".mb4, .EducationAndExperience__Item-dbww3o-0").forEach(div => {
-        const org = div.querySelector(".kdaQRj")?.textContent.trim();
-        const details = div.querySelector(".cXIEbH")?.textContent.trim();
-        if (!org || !details) return;
+//       // Extract education and certifications
+//       const certifications = [];
+//       const licensures = [];
+//       document.querySelectorAll(".mb4, .EducationAndExperience__Item-dbww3o-0").forEach(div => {
+//         const org = div.querySelector(".kdaQRj")?.textContent.trim();
+//         const details = div.querySelector(".cXIEbH")?.textContent.trim();
+//         if (!org || !details) return;
 
-        if (org.includes("Board") || details.includes("Certified")) {
-          certifications.push({
-            organization: org,
-            specialty: details.replace("Certified in", "").trim()
-          });
-        } else if (org.includes("License")) {
-          licensures.push({
-            type: org,
-            status: details.replace("Active through", "").trim()
-          });
-        }
-      });
+//         if (org.includes("Board") || details.includes("Certified")) {
+//           certifications.push({
+//             organization: org,
+//             specialty: details.replace("Certified in", "").trim()
+//           });
+//         } else if (org.includes("License")) {
+//           licensures.push({
+//             type: org,
+//             status: details.replace("Active through", "").trim()
+//           });
+//         }
+//       });
 
-      // Extract publications
-      const publications = [];
-      document.querySelectorAll(".mb4").forEach(div => {
-        const pub = div.querySelector(".kdaQRj")?.textContent.trim();
-        const author = div.querySelector(".cXIEbH")?.textContent.trim();
-        if (pub && author) publications.push({ publication: pub, author });
-      });
+//       // Extract publications
+//       const publications = [];
+//       document.querySelectorAll(".mb4").forEach(div => {
+//         const pub = div.querySelector(".kdaQRj")?.textContent.trim();
+//         const author = div.querySelector(".cXIEbH")?.textContent.trim();
+//         if (pub && author) publications.push({ publication: pub, author });
+//       });
 
-      // Find medical school
-      let medicalSchool = null;
-      document.querySelectorAll(".EducationAndExperience__Item-dbww3o-0").forEach(item => {
-        const desc = item.querySelector(".cXIEbH")?.textContent;
-        if (desc?.includes("Medical School")) {
-          medicalSchool = item.querySelector(".kdaQRj")?.textContent;
-        }
-      });
+//       // Find medical school
+//       let medicalSchool = null;
+//       document.querySelectorAll(".EducationAndExperience__Item-dbww3o-0").forEach(item => {
+//         const desc = item.querySelector(".cXIEbH")?.textContent;
+//         if (desc?.includes("Medical School")) {
+//           medicalSchool = item.querySelector(".kdaQRj")?.textContent;
+//         }
+//       });
 
-      return {
-        name,
-        degree,
-        specialty,
-        subSpecialtiy,
-        location,
-        phone,
-        certifications,
-        license: licensures,
-        publications,
-        totalPublication: publications.length,
-        medicalSchool,
-        scrapedAt: new Date().toISOString()
-      };
+//       return {
+//         name,
+//         degree,
+//         specialty,
+//         subSpecialtiy,
+//         location,
+//         phone,
+//         certifications,
+//         license: licensures,
+//         publications,
+//         totalPublication: publications.length,
+//         medicalSchool,
+//         scrapedAt: new Date().toISOString()
+//       };
+//     });
+//   } finally {
+//     await browser.close();
+//   }
+// };
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const scrapeDoctorDetails = async (url, retryCount = 3) => {
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
-  } finally {
-    await browser.close();
+
+    const page = await browser.newPage();
+
+    // Intercept and block unnecessary resources
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const blockedResources = ['image', 'stylesheet', 'font', 'media'];
+      if (blockedResources.includes(req.resourceType())) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+      // Wait for a key element
+      await page.waitForSelector('.Hero__TitleWrapper-sc-1lw4wit-6', { timeout: 15000 });
+
+      const result = await page.evaluate(() => {
+        const getText = (selector) =>
+          document.querySelector(selector)?.textContent.trim() || null;
+        const getList = (selector) =>
+          Array.from(document.querySelectorAll(selector)).map((el) =>
+            el.textContent.trim()
+          );
+
+        const name = getText('.Hero__Name-sc-1lw4wit-4')?.replace(/\s+/g, ' ');
+        const degree = document.querySelector('.Hero__Name-sc-1lw4wit-4 span')?.textContent.trim();
+        const location = getText('.Hero__Address-sc-1lw4wit-29');
+        const phone = getText('a[href^="tel:"]');
+        const specialty = getText('.Specialties__SpecialtyName-mzebq4-4');
+        const subSpecialtiy = getList('.Specialties__Subspecialty-mzebq4-3');
+
+        const certifications = [];
+        const licensures = [];
+
+        document.querySelectorAll('.mb4, .EducationAndExperience__Item-dbww3o-0').forEach(div => {
+          const org = div.querySelector('.kdaQRj')?.textContent.trim();
+          const details = div.querySelector('.cXIEbH')?.textContent.trim();
+          if (!org || !details) return;
+
+          if (org.includes('Board') || details.includes('Certified')) {
+            certifications.push({
+              organization: org,
+              specialty: details.replace('Certified in', '').trim(),
+            });
+          } else if (org.includes('License')) {
+            licensures.push({
+              type: org,
+              status: details.replace('Active through', '').trim(),
+            });
+          }
+        });
+
+        const publications = [];
+        document.querySelectorAll('.mb4').forEach(div => {
+          const pub = div.querySelector('.kdaQRj')?.textContent.trim();
+          const author = div.querySelector('.cXIEbH')?.textContent.trim();
+          if (pub && author) publications.push({ publication: pub, author });
+        });
+
+        let medicalSchool = null;
+        document.querySelectorAll('.EducationAndExperience__Item-dbww3o-0').forEach(item => {
+          const desc = item.querySelector('.cXIEbH')?.textContent;
+          if (desc?.includes('Medical School')) {
+            medicalSchool = item.querySelector('.kdaQRj')?.textContent;
+          }
+        });
+
+        return {
+          name,
+          degree,
+          specialty,
+          subSpecialtiy,
+          location,
+          phone,
+          certifications,
+          license: licensures,
+          publications,
+          totalPublication: publications.length,
+          medicalSchool,
+          scrapedAt: new Date().toISOString(),
+        };
+      });
+
+      return result;
+    } catch (error) {
+      console.error(`Attempt ${attempt} failed:`, error.message);
+      if (attempt === retryCount) throw error;
+      await delay(2000 * attempt); // Exponential backoff
+    } finally {
+      await browser.close();
+    }
   }
 };
 
@@ -195,7 +304,7 @@ const processExcelFiles = async () => {
   }
 
   // Get unique URLs with p-limit concurrency
-  const limit = pLimit(1);
+  const limit = pLimit(2);
   const uniqueUrls = [...new Set(urlArray.filter(u => u.url).map(u => u.url))];
   const searchUrls = urlArray.filter(u => u.searchUrl).map(u => u.searchUrl);
 
@@ -213,14 +322,20 @@ const processExcelFiles = async () => {
       limit(() =>
         scrapeDoctorDetails(doctor.url)
           .then(data => {
+
             res.push(data)
             // Doctor.upsert(data, { returning: true })
           })
-          .catch(error => ({
-            status: "error",
-            url: doctor.url,
-            error: error.message
-          }))
+          .catch((error)=>{
+
+            console.error('erro214134---------',error)
+            return{
+              status: "error",
+              url: doctor.url,
+              error: error.message
+            }
+
+          })
       )
     )
   );

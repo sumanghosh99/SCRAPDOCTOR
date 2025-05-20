@@ -8,16 +8,16 @@ const app = express();
 const PORT = 3000;
 
 // Test database connection
-sequelize
-  .authenticate()
-  .then(() => console.log("✅ Connected to PostgreSQL"))
-  .catch((err) => console.error("❌ Connection error:", err));
+// sequelize
+//   .authenticate()
+//   .then(() => console.log("✅ Connected to PostgreSQL"))
+//   .catch((err) => console.error("❌ Connection error:", err));
 
-// Sync models
-sequelize
-  .sync()
-  .then(() => console.log("✅ Database synced"))
-  .catch((err) => console.error("❌ Sync error:", err));
+// // Sync models
+// sequelize
+//   .sync()
+//   .then(() => console.log("✅ Database synced"))
+//   .catch((err) => console.error("❌ Sync error:", err));
 
 // Middleware
 app.use(express.json());
@@ -43,12 +43,12 @@ cron.schedule("0 * * * *", async () => {
 });
 
 
-// processExcelFiles().then(res=>{
-//   console.log(res.length)
-// })
-// .catch(e=>{
-//   console.error('error------',e)
-// })
+processExcelFiles().then(res=>{
+  console.log(res.length)
+})
+.catch(e=>{
+  console.error('error------',e)
+})
 
 // Start server
 app.listen(PORT, () => {
