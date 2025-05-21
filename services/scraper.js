@@ -89,88 +89,6 @@ const scrapeDoctorPage = async (browser, pageNum, baseUrl) => {
   }
 };
 
-// Scrape individual doctor details
-// const scrapeDoctorDetails = async (url) => {
-//   const browser = await puppeteer.launch({
-//     headless: 'new',
-//     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-//   });
-//   const page = await browser.newPage();
-
-//   try {
-//     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-//     await page.waitForSelector(".Hero__TitleWrapper-sc-1lw4wit-6", { timeout: 10000 });
-
-//     return await page.evaluate(() => {
-//       const getText = (selector) => document.querySelector(selector)?.textContent.trim() || null;
-//       const getList = (selector) => Array.from(document.querySelectorAll(selector)).map(el => el.textContent.trim());
-
-//       // Extract basic info
-//       const name = getText(".Hero__Name-sc-1lw4wit-4")?.replace(/\s+/g, " ");
-//       const degree = document.querySelector(".Hero__Name-sc-1lw4wit-4 span")?.textContent.trim();
-//       const location = getText(".Hero__Address-sc-1lw4wit-29");
-//       const phone = getText('a[href^="tel:"]');
-//       const specialty = getText(".Specialties__SpecialtyName-mzebq4-4");
-//       const subSpecialtiy = getList(".Specialties__Subspecialty-mzebq4-3");
-
-//       // Extract education and certifications
-//       const certifications = [];
-//       const licensures = [];
-//       document.querySelectorAll(".mb4, .EducationAndExperience__Item-dbww3o-0").forEach(div => {
-//         const org = div.querySelector(".kdaQRj")?.textContent.trim();
-//         const details = div.querySelector(".cXIEbH")?.textContent.trim();
-//         if (!org || !details) return;
-
-//         if (org.includes("Board") || details.includes("Certified")) {
-//           certifications.push({
-//             organization: org,
-//             specialty: details.replace("Certified in", "").trim()
-//           });
-//         } else if (org.includes("License")) {
-//           licensures.push({
-//             type: org,
-//             status: details.replace("Active through", "").trim()
-//           });
-//         }
-//       });
-
-//       // Extract publications
-//       const publications = [];
-//       document.querySelectorAll(".mb4").forEach(div => {
-//         const pub = div.querySelector(".kdaQRj")?.textContent.trim();
-//         const author = div.querySelector(".cXIEbH")?.textContent.trim();
-//         if (pub && author) publications.push({ publication: pub, author });
-//       });
-
-//       // Find medical school
-//       let medicalSchool = null;
-//       document.querySelectorAll(".EducationAndExperience__Item-dbww3o-0").forEach(item => {
-//         const desc = item.querySelector(".cXIEbH")?.textContent;
-//         if (desc?.includes("Medical School")) {
-//           medicalSchool = item.querySelector(".kdaQRj")?.textContent;
-//         }
-//       });
-
-//       return {
-//         name,
-//         degree,
-//         specialty,
-//         subSpecialtiy,
-//         location,
-//         phone,
-//         certifications,
-//         license: licensures,
-//         publications,
-//         totalPublication: publications.length,
-//         medicalSchool,
-//         scrapedAt: new Date().toISOString()
-//       };
-//     });
-//   } finally {
-//     await browser.close();
-//   }
-// };
-
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const scrapeDoctorDetails = async (url, retryCount = 3) => {
@@ -203,7 +121,7 @@ const scrapeDoctorDetails = async (url, retryCount = 3) => {
         timeout: 15000,
       });
 
-      const result = await page.evaluate(() => {
+      const result = await page.evaluate((url) => {
         const getText = (selector) =>
           document.querySelector(selector)?.textContent.trim() || null;
         const getList = (selector) =>
@@ -260,8 +178,11 @@ const scrapeDoctorDetails = async (url, retryCount = 3) => {
             }
           });
 
+        const doctorId = url.split("-").pop();
+
         return {
           name,
+          doctorId,
           degree,
           specialty,
           subSpecialty,
@@ -273,9 +194,9 @@ const scrapeDoctorDetails = async (url, retryCount = 3) => {
           totalPublication: publications.length,
           medicalSchool,
           scrapedAt: new Date().toISOString(),
-          // sourceUrl: url,
+          sourceUrl: url,
         };
-      });
+      }, url);
 
       await page.close();
 
@@ -354,14 +275,15 @@ const processExcelFiles = async () => {
     uniqueDoctorUrls.map((doctor) =>
       limit(() =>
         scrapeDoctorDetails(doctor.url)
-          .then((data) => {
+          .then(async (data) => {
             res.push(data);
-            Doctor.upsert(data, { returning: true });
+            await Doctor.upsert(data, { returning: true }); // ensure DB write
+            return { success: true };
           })
           .catch((error) => {
-            console.error("erro214134---------", error);
+            console.error("Error scraping:", doctor.url, error);
             return {
-              status: "error",
+              success: false,
               url: doctor.url,
               error: error.message,
             };
@@ -373,8 +295,8 @@ const processExcelFiles = async () => {
 
   return {
     total: uniqueDoctorUrls.length,
-    success: results.filter((r) => !r.status).length,
-    errors: results.filter((r) => r.status === "error"),
+    success: results.filter((r) => r.success).length,
+    errors: results.filter((r) => !r.success),
   };
 };
 

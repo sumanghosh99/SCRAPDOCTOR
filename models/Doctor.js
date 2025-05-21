@@ -24,6 +24,11 @@ import sequelize from "../config/database.js";
 const Doctor = sequelize.define(
   "Doctor",
   {
+    doctorId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+    },
     name: {
       type: DataTypes.STRING,
       allowNull: false,
